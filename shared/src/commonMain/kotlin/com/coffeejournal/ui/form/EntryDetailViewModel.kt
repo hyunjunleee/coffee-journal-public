@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -48,6 +49,11 @@ class EntryDetailViewModel(
     )
 
     @Volatile private var deleting = false
+
+    /** The 기본 레시피's name, for the save-as-recipe switch's hint (what turning it on replaces); null when none. */
+    val defaultRecipeName: StateFlow<String?> = (defaultRecipe?.observeId() ?: flowOf(null))
+        .combine(myRecipes.observeAll()) { id, list -> DefaultRecipe.resolve(id, list)?.name }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     // the sibling scan normalises every record's name, so it runs off the main thread (gap #10)
     val state: StateFlow<UiState> = combine(entries.observeAll(), beanMeta.observeBest()) { all, best -> all to best }.deriveOffMain { (all, best) ->

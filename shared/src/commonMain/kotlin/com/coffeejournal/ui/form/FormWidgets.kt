@@ -544,9 +544,10 @@ internal fun LauncherCard(
     highlight: Boolean = false,
     onDelete: (() -> Unit)? = null,
     sourceUrl: String? = null,
-    /** A second action after [applyLabel] (내 레시피: 기본으로 지정 / 기본 해제). */
+    /** A second action after [applyLabel] (내 레시피: 기본으로 지정 / 기본 해제), read by TalkBack as [extraDescription]. */
     extraLabel: String? = null,
     onExtra: (() -> Unit)? = null,
+    extraDescription: String? = null,
 ) {
     Column(
         Modifier.fillMaxWidth().padding(bottom = 8.dp)
@@ -560,22 +561,18 @@ internal fun LauncherCard(
         }
         Text(spec, style = AppType.monoValue, modifier = Modifier.padding(top = 4.dp))
         if (!desc.isNullOrBlank()) Text(desc, style = AppType.bodyMuted, modifier = Modifier.padding(top = 6.dp))
-        // wraps at a large font size instead of pushing the last action off the card
-        FlowRow(Modifier.padding(top = 2.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+        // wraps at a large font size instead of pushing the last action off the card; the actions are kept well apart
+        // (also a wrapped line from the one above) so the delete dialog is not opened by a slightly missed "apply" tap
+        FlowRow(
+            Modifier.padding(top = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            itemVerticalAlignment = Alignment.CenterVertically,
+        ) {
             TextLink(applyLabel, Ink.text, onApply)
-            if (extraLabel != null && onExtra != null) {
-                Spacer(Modifier.width(20.dp))
-                TextLink(extraLabel, Ink.textMuted, onExtra)
-            }
-            if (onDelete != null) {
-                // kept well apart so the delete dialog is not opened by a slightly missed "apply" tap
-                Spacer(Modifier.width(20.dp))
-                TextLink("삭제", Ink.bad, onDelete)
-            }
-            if (sourceUrl != null) {
-                Spacer(Modifier.width(20.dp))
-                TextLink("출처: ${sourceHost(sourceUrl)} ↗", Ink.textMuted, { openUrl(sourceUrl) })
-            }
+            if (extraLabel != null && onExtra != null) TextLink(extraLabel, Ink.textMuted, onExtra, description = extraDescription)
+            if (onDelete != null) TextLink("삭제", Ink.bad, onDelete)
+            if (sourceUrl != null) TextLink("출처: ${sourceHost(sourceUrl)} ↗", Ink.textMuted, { openUrl(sourceUrl) })
         }
     }
 }
@@ -588,8 +585,12 @@ internal val MinTouch = 48.dp
 
 /** Plain text action (web text link): the text looks the same, the tappable area around it is at least 48 dp. */
 @Composable
-internal fun TextLink(text: String, color: Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(modifier.sizeIn(minWidth = MinTouch, minHeight = MinTouch).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+internal fun TextLink(text: String, color: Color, onClick: () -> Unit, modifier: Modifier = Modifier, description: String? = null) {
+    val described = if (description != null) Modifier.semantics { contentDescription = description } else Modifier
+    Box(
+        modifier.sizeIn(minWidth = MinTouch, minHeight = MinTouch).clickable(role = Role.Button, onClick = onClick).then(described),
+        contentAlignment = Alignment.Center,
+    ) {
         Text(text, style = AppType.small.copy(color = color))
     }
 }

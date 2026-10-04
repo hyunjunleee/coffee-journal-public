@@ -70,9 +70,7 @@ class DefaultRecipeTest {
         assertNull(DefaultRecipe.resolve("", all))
     }
 
-    @Test fun theDefault_leadsTheList_andSaysSo() {
-        assertEquals(listOf("r2", "r1"), DefaultRecipe.ordered(listOf(morning, plain), null).map { it.id })
-        assertEquals(listOf("r1", "r2"), DefaultRecipe.ordered(listOf(plain, morning), "r1").map { it.id })
+    @Test fun theDefaultsCard_saysSo() {
         assertEquals("기본 · ★★★", DefaultRecipe.badge(morning.copy(rating = 3), isDefault = true))
         assertEquals("기본", DefaultRecipe.badge(morning, isDefault = true))
         assertEquals("", DefaultRecipe.badge(morning, isDefault = false))
@@ -80,15 +78,26 @@ class DefaultRecipeTest {
         assertEquals("?g : ?g · ?°C · ", DefaultRecipe.spec(MyRecipe(id = "x", name = "x", createdAt = now)))
     }
 
-    @Test fun theRecipesStepsAsTheyCame_areNotALogOfTheUsersOwn() {
-        val s = DefaultRecipe.startWith(newBrew(), morning)
-        assertFalse(FormMapper.hasOwnStepLog(s), "the timer replaces them without asking")
-        val changed = s.copy(steps = s.steps.mapIndexed { i, st -> if (i == 0) st.copy(wait = "35") else st })
-        assertTrue(FormMapper.hasOwnStepLog(changed), "a changed row is the user's own")
-        assertTrue(FormMapper.hasOwnStepLog(s.copy(steps = s.steps.dropLast(1))))
-        // the example a form without a recipe starts with, as before
+    @Test fun theFormHoldsTheRecipe_onlyWhileItsValuesAndRowsAreAsOpened() {
+        val opened = DefaultRecipe.startWith(newBrew(), morning)
+        assertTrue(DefaultRecipe.holdsOpenedRecipe(opened.copy(name = "케냐 AA", notes = "달다"), opened), "other fields are free")
+        assertFalse(DefaultRecipe.holdsOpenedRecipe(opened.copy(dose = "18"), opened))
+        assertFalse(DefaultRecipe.holdsOpenedRecipe(FormMapper.applyMyRecipe(opened, plain), opened), "another recipe applied")
+        val changedRow = opened.copy(steps = opened.steps.mapIndexed { i, st -> if (i == 0) st.copy(wait = "35") else st })
+        assertFalse(DefaultRecipe.sameSteps(changedRow, opened))
+        assertTrue(DefaultRecipe.sameSteps(opened.copy(steps = opened.steps + StepForm()), opened), "a blank row is no row")
+        // the step log of a record is the user's own wherever it came from (an edit asks before the timer replaces it)
+        assertTrue(FormMapper.hasOwnStepLog(opened))
         assertFalse(FormMapper.hasOwnStepLog(newBrew()))
         assertEquals(GenericSteps.example, newBrew().steps.map { it.toStep() })
+    }
+
+    @Test fun theCopy_putsNoParticleAfterAName() {
+        assertEquals("⭐ 기본 레시피(\"아침 3단\")를 채웠어요. 다른 레시피를 적용하거나 고쳐 써도 돼요.", DefaultRecipeTexts.startedWith("아침 3단"))
+        assertEquals("기본 레시피: V60 4:6", DefaultRecipeTexts.chooserHint("V60 4:6"))
+        assertEquals("지금 기본 레시피(\"아침 3단\") 대신 이 레시피가 기본이 돼요.", DefaultRecipeTexts.saveAsDefaultHint("아침 3단"))
+        assertEquals(DefaultRecipeTexts.SAVE_AS_DEFAULT_HINT, DefaultRecipeTexts.saveAsDefaultHint(null))
+        assertEquals("\"주말용\" 레시피를 저장하고 기본 레시피로 지정했어요.", DefaultRecipeTexts.savedAsDefault("주말용"))
     }
 
     @Test fun theStore_keepsTheId_asAJournalSetting_andForgetsADeletedRecipe() = runTest {

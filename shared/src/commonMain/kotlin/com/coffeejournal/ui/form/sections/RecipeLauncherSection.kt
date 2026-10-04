@@ -12,6 +12,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -44,7 +45,7 @@ internal fun RecipeLauncherSection(
     onMine: (MyRecipe) -> Unit,
     onDeleteMine: (String) -> Unit,
     onOpenMyRecipes: () -> Unit,
-    /** The 기본 레시피's id: its card says so and leads the list. */
+    /** The 기본 레시피's id: its card says so (the list keeps its order). */
     defaultRecipeId: String? = null,
     /** Makes a recipe the default (null: none). */
     onSetDefault: (String?) -> Unit = {},
@@ -65,7 +66,7 @@ internal fun RecipeLauncherSection(
         when (open) {
             RecipeLauncher.CHAMPIONS -> ChampionsPanel(onChampion)
             RecipeLauncher.CAFE -> CafePanel(onCafe)
-            RecipeLauncher.MINE -> MyRecipesPanel(DefaultRecipe.ordered(myRecipes, defaultRecipeId), defaultRecipeId, onMine, onDeleteMine, onSetDefault, onOpenMyRecipes)
+            RecipeLauncher.MINE -> MyRecipesPanel(myRecipes, defaultRecipeId, onMine, onDeleteMine, onSetDefault, onOpenMyRecipes)
             null -> {}
         }
     }
@@ -122,15 +123,18 @@ private fun MyRecipesPanel(
     }
     GhostButton("+ 새 레시피 만들기", small = true, onClick = onOpenMyRecipes, modifier = Modifier.padding(bottom = 12.dp))
     recipes.forEach { r ->
-        val isDefault = r.id == defaultId
-        LauncherCard(
-            title = r.name, right = DefaultRecipe.badge(r, isDefault),
-            spec = DefaultRecipe.spec(r),
-            desc = r.beanName.takeIf { it.isNotBlank() }?.let { "원두: $it" }, applyLabel = "이 레시피 적용 →",
-            onApply = { onApply(r) }, onDelete = { pendingDelete = r }, highlight = isDefault,
-            extraLabel = if (isDefault) DefaultRecipeTexts.UNSET else DefaultRecipeTexts.SET,
-            onExtra = { onSetDefault(if (isDefault) null else r.id) },
-        )
+        key(r.id) {
+            val isDefault = r.id == defaultId
+            LauncherCard(
+                title = r.name, right = DefaultRecipe.badge(r, isDefault),
+                spec = DefaultRecipe.spec(r),
+                desc = r.beanName.takeIf { it.isNotBlank() }?.let { "원두: $it" }, applyLabel = "이 레시피 적용 →",
+                onApply = { onApply(r) }, onDelete = { pendingDelete = r }, highlight = isDefault,
+                extraLabel = if (isDefault) DefaultRecipeTexts.UNSET else DefaultRecipeTexts.SET,
+                extraDescription = DefaultRecipeTexts.toggleLabel(r.name, isDefault),
+                onExtra = { onSetDefault(if (isDefault) null else r.id) },
+            )
+        }
     }
     pendingDelete?.let { r ->
         AlertDialog(

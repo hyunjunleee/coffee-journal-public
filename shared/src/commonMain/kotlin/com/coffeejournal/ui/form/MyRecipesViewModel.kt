@@ -10,7 +10,6 @@ import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.Ids
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -37,8 +36,9 @@ class MyRecipesViewModel(private val repo: MyRecipeRepository, misc: MiscReposit
     val defaultId: StateFlow<String?> = defaultRecipe.observeId()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /** The default first, then the newest first. */
-    val recipes: StateFlow<List<MyRecipe>> = combine(repo.observeAll(), defaultRecipe.observeId()) { list, id -> DefaultRecipe.ordered(list, id) }
+    /** Newest first; the default keeps its place (its card says so), so choosing one moves nothing under the finger. */
+    val recipes: StateFlow<List<MyRecipe>> = repo.observeAll()
+        .map { list -> list.sortedByDescending { it.createdAt } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val equipment: StateFlow<RecipeEquipment> = misc.observeAll()

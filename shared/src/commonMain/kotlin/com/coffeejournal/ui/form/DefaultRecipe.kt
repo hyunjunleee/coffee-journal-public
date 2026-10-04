@@ -31,13 +31,21 @@ object DefaultRecipe {
     /** "15g : 240g · 92°C · 오리가미": how a recipe card sums it up. */
     fun spec(r: MyRecipe): String = "${r.dose.ifBlank { "?" }}g : ${r.water.ifBlank { "?" }}g · ${r.temp.ifBlank { "?" }}°C · ${r.dripper}"
 
-    /** A recipe card's right corner: "기본" for the default, then its stars. */
+    /** A recipe card's right corner: "기본" for the default, then its stars. The list keeps its order (newest first). */
     fun badge(r: MyRecipe, isDefault: Boolean): String =
         listOfNotNull(DefaultRecipeTexts.BADGE.takeIf { isDefault }, "★".repeat(r.rating).takeIf { r.rating > 0 }).joinToString(" · ")
 
-    /** The default first, then the newest first (the order 내 레시피 lists them in). */
-    fun ordered(recipes: List<MyRecipe>, defaultId: String?): List<MyRecipe> =
-        recipes.sortedWith(compareByDescending<MyRecipe> { it.id == defaultId }.thenByDescending { it.createdAt })
+    /**
+     * Whether [s] still holds the recipe the form [opened] with: the same recipe values and step rows. The form says it
+     * was filled with the default recipe only while this holds.
+     */
+    fun holdsOpenedRecipe(s: FormState, opened: FormState): Boolean =
+        s.appliedRecipeRef == opened.appliedRecipeRef && sameSteps(s, opened) &&
+            listOf(s.dose, s.water, s.temp, s.dripper, s.filter, s.grind) == listOf(opened.dose, opened.water, opened.temp, opened.dripper, opened.filter, opened.grind)
+
+    /** The step rows of [a] and [b] read the way the form reads them (blank rows left out). */
+    fun sameSteps(a: FormState, b: FormState): Boolean =
+        a.steps.map { it.toStep() }.filter { !it.isEmpty } == b.steps.map { it.toStep() }.filter { !it.isEmpty }
 }
 
 object DefaultRecipeTexts {
@@ -53,11 +61,22 @@ object DefaultRecipeTexts {
     const val ABOUT_LIST = "\"기본으로 지정\"한 레시피는 새 기록(직접 내린 커피)을 열 때 미리 채워져요."
     const val ABOUT = "새 기록(직접 내린 커피)을 열면 이 레시피의 드리퍼·필터·분쇄도·원두량·물량·온도·붓기 단계가 채워져 있어요."
 
-    /** The form's line while it holds the default recipe as it opened with it. */
-    fun startedWith(name: String) = "⭐ 기본 레시피 \"$name\"로 채웠어요. 다른 레시피를 적용하거나 고쳐 써도 돼요."
+    const val NO_RECIPES = "아직 내 레시피가 없어요. 레시피를 하나 만들어 기본으로 지정하면 새 기록(직접 내린 커피)이 그 레시피로 채워진 채 열려요."
+    const val MAKE = "내 레시피 만들기"
 
-    /** The chooser's 직접 내린 커피 line. */
-    fun chooserHint(name: String) = "기본 레시피 \"$name\"로 시작"
+    // no particle right after a recipe's name (a name ends in anything: "아침 3단", "V60 4:6")
+
+    /** The form's line while it holds the default recipe as it opened with it. */
+    fun startedWith(name: String) = "⭐ 기본 레시피(\"$name\")를 채웠어요. 다른 레시피를 적용하거나 고쳐 써도 돼요."
+
+    /** The chooser's 직접 내린 커피 line (shown after ⭐). */
+    fun chooserHint(name: String) = "기본 레시피: $name"
+
+    /** The save-as-recipe switch's hint: what turning it on replaces. */
+    fun saveAsDefaultHint(current: String?) = current?.let { "지금 기본 레시피(\"$it\") 대신 이 레시피가 기본이 돼요." } ?: SAVE_AS_DEFAULT_HINT
+
+    /** What TalkBack reads for a card's 기본으로 지정 / 기본 해제 (the card's name with it). */
+    fun toggleLabel(name: String, isDefault: Boolean) = if (isDefault) "$name, 기본 레시피 해제" else "$name, 기본 레시피로 지정"
 
     /** The detail's toast after saving as a recipe. */
     fun savedAsDefault(name: String) = "\"$name\" 레시피를 저장하고 기본 레시피로 지정했어요."

@@ -15,6 +15,8 @@ import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.ui.extract.NewRecordTexts
 import com.coffeejournal.ui.form.DefaultRecipeStore
 import com.coffeejournal.ui.form.DefaultRecipeTexts
+import com.coffeejournal.ui.form.DetailEvent
+import com.coffeejournal.ui.form.RecordDraftTexts
 import com.coffeejournal.ui.form.EntryDetailViewModel
 import com.coffeejournal.ui.form.FormArgs
 import com.coffeejournal.ui.form.RecordDrafts
@@ -22,6 +24,8 @@ import com.coffeejournal.ui.form.RecordFormViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -45,8 +49,10 @@ class DefaultRecipeFlowTest : CoverageFlowBase() {
     private val home = hasText("+ 새 기록 추가")
     private val line = hasTestTag("default-recipe-line")
     private val steps = listOf(RecipeStep("0:00", "40", "30", "뜸"), RecipeStep("0:30", "110", "20", "2차"), RecipeStep("1:10", "100", "", "3차"))
-    private val morning = MyRecipe(id = "r1", name = "아침 3단", dose = "17", water = "272", temp = "93", dripper = "V60", filter = "하리오 01", steps = steps, createdAt = Dates.nowMillis())
-    private val plain = MyRecipe(id = "r2", name = "간단 1:16", dose = "16", water = "256", temp = "91", dripper = "칼리타 웨이브", createdAt = Dates.nowMillis() - 1)
+    // 아침 3단 is the newer one: the first card of a list (newest first)
+    private val base = Dates.nowMillis()
+    private val morning = MyRecipe(id = "r1", name = "아침 3단", dose = "17", water = "272", temp = "93", dripper = "V60", filter = "하리오 01", steps = steps, createdAt = base)
+    private val plain = MyRecipe(id = "r2", name = "간단 1:16", dose = "16", water = "256", temp = "91", dripper = "칼리타 웨이브", createdAt = base - 60_000)
 
     private val store get() = koinGet<DefaultRecipeStore>()
     private fun defaultId(): String? = runBlocking { store.id() }
@@ -67,17 +73,16 @@ class DefaultRecipeFlowTest : CoverageFlowBase() {
         clickText("⭐ 내 레시피")
         waitForText(morning.name)
         assertFalse("no default yet", has(button(DefaultRecipeTexts.UNSET)))
-        // newest first: 아침 3단, 간단 1:16
+        // newest first: 아침 3단, 간단 1:16; choosing one moves no card, only the mark
+        val unset = button(DefaultRecipeTexts.UNSET)
         clickText(DefaultRecipeTexts.SET, index = 0)
-        waitUntil("아침 3단 is the default") { defaultId() == morning.id }
-        waitFor(button(DefaultRecipeTexts.UNSET))
-        // choosing another moves the mark, and the default leads the list
+        waitUntil("아침 3단 is the default, on its own card") { defaultId() == morning.id && has(unset) && top(unset) < top(hasText(plain.name)) }
+        assertTrue("the list keeps its order", top(hasText(morning.name)) < top(hasText(plain.name)))
         clickText(DefaultRecipeTexts.SET, index = 0)
-        waitUntil("간단 1:16 is the default") { defaultId() == plain.id }
-        assertEquals(1, count(button(DefaultRecipeTexts.UNSET)))
-        assertTrue("the default first", top(hasText(plain.name)) < top(hasText(morning.name)))
+        waitUntil("간단 1:16 is the default") { defaultId() == plain.id && count(unset) == 1 && top(unset) > top(hasText(plain.name)) }
+        assertTrue(top(hasText(morning.name)) < top(hasText(plain.name)))
         clickText(DefaultRecipeTexts.SET, index = 0)
-        waitUntil("아침 3단 again") { defaultId() == morning.id }
+        waitUntil("아침 3단 again") { defaultId() == morning.id && count(unset) == 1 && top(unset) < top(hasText(plain.name)) }
         assertFalse("this form is left as it was", has(field("17")))
         // choosing it is no input: back leaves at once
         backHome()
@@ -87,7 +92,13 @@ class DefaultRecipeFlowTest : CoverageFlowBase() {
         listOf("272", "93", "V60", "하리오 01").forEach { assertTrue("$it filled", has(field(it))) }
         waitFor(line)
         assertTrue(has(hasText(DefaultRecipeTexts.startedWith(morning.name))))
-        backHome()
+        // another recipe applied: the form no longer holds the default, and that is input
+        clickText("🏆 챔피언 레시피")
+        clickText("이 비율 적용 →", index = 0)
+        waitGone(line)
+        back()
+        clickText(RecordDraftTexts.DISCARD)
+        waitUntil("home") { has(home) }
 
         openNewRecord()
         waitFor(field("17"))
@@ -157,6 +168,15 @@ class DefaultRecipeFlowTest : CoverageFlowBase() {
         clickText(DefaultRecipeTexts.UNSET)
         waitUntil("unset") { defaultId() == null }
         waitForText(DefaultRecipeTexts.NONE)
+        back()
+        waitUntil("home") { has(home) }
+        clickText("+ 새 기록 추가")
+        waitForText(NewRecordTexts.COFFEE)
+        assertFalse("no default, no hint", has(hasText(DefaultRecipeTexts.chooserHint(morning.name), substring = true)))
+        back()
+        waitUntil("home") { has(home) }
+        tap(hasTestTag("open-settings"))
+        waitForText(DefaultRecipeTexts.NONE)
 
         // 내 레시피 from 설정: the list, the new-recipe form closed
         clickText(DefaultRecipeTexts.PICK)
@@ -189,10 +209,37 @@ class DefaultRecipeFlowTest : CoverageFlowBase() {
         // what this form opened with stays
         assertTrue(has(field("17")))
         backHome()
-        openNewRecord()
+        clickText("+ 새 기록 추가")
+        waitForText(NewRecordTexts.COFFEE)
+        assertFalse(has(hasText(DefaultRecipeTexts.chooserHint(morning.name), substring = true)))
+        clickText(NewRecordTexts.BREW)
         waitForText("레시피로 시작")
         assertFalse(has(field("17")))
         assertFalse(has(line))
+        backHome()
+        // 설정: no recipe left, so it offers to make one
+        tap(hasTestTag("open-settings"))
+        waitForText(DefaultRecipeTexts.NO_RECIPES)
+        clickText(DefaultRecipeTexts.MAKE)
+        waitFor(field("예: 밝은 산미용 3단 푸어"))
+    }
+
+    @Test
+    fun deletingTheDefault_onTheMyRecipesScreen_leavesNone() {
+        recipes(morning, plain)
+        setDefault(morning.id)
+        launchApp()
+        tap(hasTestTag("open-settings"))
+        waitForText(morning.name)
+        clickText(DefaultRecipeTexts.CHANGE)
+        waitFor(button(DefaultRecipeTexts.UNSET))
+        // 아침 3단 is the newest: the first card
+        clickText("삭제", index = 0)
+        clickNode(dialogButton("삭제"))
+        waitUntil("deleted and no longer the default") { defaultId() == null && runBlocking { koinGet<MyRecipeRepository>().getAll() }.map { it.id } == listOf(plain.id) }
+        back()
+        waitForText(DefaultRecipeTexts.NONE)
+        assertFalse(has(hasText(morning.name)))
     }
 
     // ───────────────────────── view models: the save dialog, drafts, process death ─────────────────────────
@@ -224,17 +271,25 @@ class DefaultRecipeFlowTest : CoverageFlowBase() {
         SampleData.seed()
         val detail = vm("detail") { EntryDetailViewModel("e1", koinGet(), koinGet(), koinGet(), koinGet(), koinGet()) }
         // the screen's collection: the record is read off the main thread while the state is watched
-        val collecting = CoroutineScope(Dispatchers.Main).launch { detail.state.collect {} }
+        val saved = mutableListOf<DetailEvent.RecipeSaved>()
+        val scope = CoroutineScope(Dispatchers.Main)
+        scope.launch { detail.state.collect {} }
+        scope.launch { detail.defaultRecipeName.collect {} }
+        scope.launch { detail.events.filterIsInstance<DetailEvent.RecipeSaved>().collect { saved += it } }
         pump("record read") { detail.state.value.entry != null }
         detail.saveAsMyRecipe("워카 기본", asDefault = false)
-        pump("saved") { runBlocking { koinGet<MyRecipeRepository>().getAll() }.any { it.name == "워카 기본" } }
+        // the event comes after everything the save does
+        pump("saved") { saved.size == 1 }
+        assertFalse(saved[0].asDefault)
         assertNull("without the switch it is just a recipe", defaultId())
         detail.saveAsMyRecipe("워카 기본 2", asDefault = true)
-        pump("saved as the default") { defaultId() != null }
+        pump("saved as the default") { saved.size == 2 }
+        assertTrue(saved[1].asDefault)
         val made = runBlocking { koinGet<MyRecipeRepository>().getById(defaultId()!!) }!!
         assertEquals("워카 기본 2", made.name)
         assertEquals(entry("e1")!!.steps, made.steps)
-        collecting.cancel()
+        pump("the switch's hint names it") { detail.defaultRecipeName.value == "워카 기본 2" }
+        scope.cancel()
     }
 
     @Test
@@ -272,4 +327,27 @@ class DefaultRecipeFlowTest : CoverageFlowBase() {
         assertTrue(restored.hasChanges())
     }
 
+
+    @Test
+    fun theTimer_replacesTheDefaultsRowsFreely_butAsksForAnyOtherLog() {
+        SampleData.seed()
+        recipes(morning)
+        setDefault(morning.id)
+        val fresh = formVm("fresh")
+        pump("loaded") { fresh.loaded.value }
+        assertEquals(steps, fresh.state.value.steps.map { it.toStep() })
+        assertFalse("the rows the form opened with", fresh.timerRoute().hasLog)
+        fresh.update { s -> s.copy(steps = s.steps.mapIndexed { i, st -> if (i == 0) st.copy(wait = "35") else st }) }
+        assertTrue("a changed row is the user's own", fresh.timerRoute().hasLog)
+
+        // an edit: the record's own log, though it is its recipe's rows
+        val e1 = entry("e1")!!
+        assertEquals(e1.recipeRef?.steps, e1.steps)
+        val edit = vm("edit") {
+            RecordFormViewModel(FormArgs(entryId = "e1"), koinGet(), koinGet(), koinGet(), koinGet(), koinGet(), koinGet(), SavedStateHandle(), koinGet<RecordDrafts>(), defaultRecipe = koinGet())
+        }
+        pump("loaded") { edit.loaded.value }
+        assertTrue(edit.timerRoute().hasLog)
+        assertNull(edit.startedWithDefault(edit.state.value, morning.id))
+    }
 }

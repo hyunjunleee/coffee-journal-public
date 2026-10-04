@@ -126,6 +126,20 @@ class RecordFormViewModel(
     /** Whether this form takes the default recipe when it opens (a new brew): the form then says so while it holds it. */
     val takesDefaultRecipe: Boolean = DefaultRecipe.appliesTo(args)
 
+    /** The default recipe (id, name) the form opened with; kept in the saved state next to [opened]. */
+    private var openedWith: Pair<String, String>? = savedState?.get<String>(OPENED_RECIPE_KEY)?.split('\u0000')
+        ?.takeIf { it.size == 2 }?.let { it[0] to it[1] }
+
+    /**
+     * The default recipe's name while the form holds it as it opened with it, and it is still the default ([defaultId]);
+     * null otherwise (no default, a draft or the user changed the recipe, another recipe applied, the default changed).
+     */
+    fun startedWithDefault(s: FormState, defaultId: String?): String? {
+        val (id, name) = openedWith ?: return null
+        val start = opened ?: return null
+        return name.takeIf { id == defaultId && DefaultRecipe.holdsOpenedRecipe(s, start) }
+    }
+
     /** The 기본 레시피's id ([DefaultRecipe.KEY]), for the ⭐ 내 레시피 cards; null when none is chosen. */
     val defaultRecipeId: StateFlow<String?> = (defaultRecipe?.observeId() ?: flowOf(null))
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -208,6 +222,7 @@ class RecordFormViewModel(
         val source = args.againFrom?.let { entries.getById(it) }
         // 기본 레시피: a new brew starts with it (a deleted one is none)
         val start = if (takesDefaultRecipe) defaultRecipe?.id()?.let { myRecipes.getById(it) } else null
+        val keepOpenedWith = { if (start != null) setOpenedWith(start.id to start.name) }
         val withDefaults = { s: FormState ->
             when {
                 source != null -> FormMapper.again(source, s.createdAt, s.draftId)
@@ -218,16 +233,25 @@ class RecordFormViewModel(
         }
         if (restored != null) {
             // after process death the saved state wins; one kept by an older version is measured against a new form
-            if (opened == null) markOpened(withDefaults(FormMapper.newState(args.mode, args.cuppingType, restored.createdAt, draftId = restored.draftId)))
+            if (opened == null) {
+                markOpened(withDefaults(FormMapper.newState(args.mode, args.cuppingType, restored.createdAt, draftId = restored.draftId)))
+                keepOpenedWith()
+            }
             _loaded.value = true
             return
         }
         _state.update(withDefaults)
+        keepOpenedWith()
         val opening = _state.value
         val draft = takeDraft(opening)
         markOpened(opening)
         draft?.let { _state.value = it }
         _loaded.value = true
+    }
+
+    private fun setOpenedWith(recipe: Pair<String, String>) {
+        openedWith = recipe
+        savedState?.set(OPENED_RECIPE_KEY, recipe.first + "\u0000" + recipe.second)
     }
 
     private fun markOpened(start: FormState) {
@@ -326,10 +350,17 @@ class RecordFormViewModel(
     /** Notes picked in the AI note helper go after 내가 느낀 노트, each only once (case-insensitive). */
     fun addActualNotes(notes: List<String>) = update { it.copy(actualNotes = NoteHelperResult.merge(it.actualNotes, notes)) }
 
-    /** Opens the brew timer with the applied recipe, telling it whether a log of the user's own would be replaced. */
+    /**
+     * Opens the brew timer with the applied recipe, telling it whether a log of the user's own would be replaced. The
+     * default recipe's rows a new brew opened with, untouched, are not the user's own: the timer replaces them freely.
+     */
     fun timerRoute(): Route.BrewTimer {
         val s = _state.value
-        return Route.BrewTimer(recipe = BrewTimerResult.encodeRecipe(s.appliedRecipeRef?.takeIf { it.steps.isNotEmpty() }), hasLog = FormMapper.hasOwnStepLog(s))
+        val openedRows = openedWith != null && opened?.let { DefaultRecipe.sameSteps(s, it) } == true
+        return Route.BrewTimer(
+            recipe = BrewTimerResult.encodeRecipe(s.appliedRecipeRef?.takeIf { it.steps.isNotEmpty() }),
+            hasLog = FormMapper.hasOwnStepLog(s) && !openedRows,
+        )
     }
 
     fun setPhoto(index: Int, bytes: ByteArray) = update { s ->
@@ -429,6 +460,7 @@ class RecordFormViewModel(
         const val STATE_KEY = "recordForm"
         const val OPENED_KEY = "recordForm.opened"
         const val DRAFT_NOTICE_KEY = "recordForm.draftNotice"
+        const val OPENED_RECIPE_KEY = "recordForm.openedRecipe"
         /** A draft is written this long after the last change. */
         const val DRAFT_DELAY_MS = 700L
     }

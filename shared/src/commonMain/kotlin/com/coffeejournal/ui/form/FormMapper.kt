@@ -575,15 +575,12 @@ internal object FormMapper {
     // ---------- steps ----------
 
     /**
-     * Whether the step log holds rows of the user's own: anything but nothing, the example every new form starts with,
-     * or the applied recipe's steps as it filled them in (the 기본 레시피 a new brew opens with too). Replacing such a
-     * log with the brew timer's rows asks first.
+     * Whether the step log holds rows of the user's own: anything but nothing or the example every new form starts
+     * with. Replacing such a log with the brew timer's rows asks first.
      */
     fun hasOwnStepLog(state: FormState): Boolean {
         val live = state.steps.map { it.toStep() }.filter { !it.isEmpty }
-        // read the way the form reads its rows, so a recipe's untouched steps compare equal
-        val recipe = state.appliedRecipeRef?.steps.orEmpty().map { StepForm.from(it).toStep() }.filter { !it.isEmpty }
-        return live.isNotEmpty() && live != GenericSteps.example && live != recipe
+        return live.isNotEmpty() && live != GenericSteps.example
     }
 
     /** Web updateStepsSummary: with a log present, 총 추출시간 always mirrors the computed value. */

@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
@@ -94,9 +95,11 @@ fun MyRecipesScreen(nav: NavHostController, newRecipe: Boolean = true) {
             }
             Spacer(Modifier.height(16.dp))
             recipes.forEach { r ->
-                val isDefault = r.id == defaultId
-                RecipeCard(r, isDefault, onToggleDefault = { vm.setDefault(if (isDefault) null else r.id) }, onDelete = { pendingDelete = r })
-                Spacer(Modifier.height(8.dp))
+                key(r.id) {
+                    val isDefault = r.id == defaultId
+                    RecipeCard(r, isDefault, onToggleDefault = { vm.setDefault(if (isDefault) null else r.id) }, onDelete = { pendingDelete = r })
+                    Spacer(Modifier.height(8.dp))
+                }
             }
             Spacer(Modifier.height(96.dp))
         }

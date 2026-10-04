@@ -158,10 +158,8 @@ private fun RecordFormBody(
     FoldAllRow(FormFold.parts(state.category).map(folds.isFolded), onFoldAll = vm::foldAll)
     if (state.isBrew) {
         val defaultId by vm.defaultRecipeId.collectAsStateWithLifecycle()
-        // a new brew holding the default recipe it opened with (or applied again) says so
-        val startedWith = suggestions.myRecipes.firstOrNull { it.id == defaultId }
-            ?.takeIf { vm.takesDefaultRecipe && state.appliedRecipeRef?.name == it.name }
-            ?.let { DefaultRecipeTexts.startedWith(it.name) }
+        // a new brew still holding the default recipe it opened with says so
+        val startedWith = vm.startedWithDefault(state, defaultId)?.let(DefaultRecipeTexts::startedWith)
         RecipeLauncherSection(
             open = state.openLauncher,
             myRecipes = suggestions.myRecipes,
