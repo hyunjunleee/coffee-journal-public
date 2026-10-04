@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -530,6 +532,7 @@ internal fun FoldSection(
 }
 
 /** Card of the recipe launcher panels (web .champ-card). */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun LauncherCard(
     title: String,
@@ -541,6 +544,9 @@ internal fun LauncherCard(
     highlight: Boolean = false,
     onDelete: (() -> Unit)? = null,
     sourceUrl: String? = null,
+    /** A second action after [applyLabel] (내 레시피: 기본으로 지정 / 기본 해제). */
+    extraLabel: String? = null,
+    onExtra: (() -> Unit)? = null,
 ) {
     Column(
         Modifier.fillMaxWidth().padding(bottom = 8.dp)
@@ -554,8 +560,13 @@ internal fun LauncherCard(
         }
         Text(spec, style = AppType.monoValue, modifier = Modifier.padding(top = 4.dp))
         if (!desc.isNullOrBlank()) Text(desc, style = AppType.bodyMuted, modifier = Modifier.padding(top = 6.dp))
-        Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        // wraps at a large font size instead of pushing the last action off the card
+        FlowRow(Modifier.padding(top = 2.dp), itemVerticalAlignment = Alignment.CenterVertically) {
             TextLink(applyLabel, Ink.text, onApply)
+            if (extraLabel != null && onExtra != null) {
+                Spacer(Modifier.width(20.dp))
+                TextLink(extraLabel, Ink.textMuted, onExtra)
+            }
             if (onDelete != null) {
                 // kept well apart so the delete dialog is not opened by a slightly missed "apply" tap
                 Spacer(Modifier.width(20.dp))

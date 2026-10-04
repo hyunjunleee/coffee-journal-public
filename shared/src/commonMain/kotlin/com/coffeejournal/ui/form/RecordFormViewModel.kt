@@ -44,6 +44,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -87,6 +88,8 @@ class RecordFormViewModel(
     private val drafts: RecordDrafts? = null,
     /** Which parts of the form are folded, kept on this device. Null in plain unit tests (nothing folded). */
     private val foldStore: FormFoldStore? = null,
+    /** The 기본 레시피 a new brew starts with ([DefaultRecipe]). Null in plain unit tests (none). */
+    private val defaultRecipe: DefaultRecipeStore? = null,
 ) : ViewModel() {
     private val restored: FormState? = savedState?.get<String>(STATE_KEY)?.let(FormStateCodec::decode)
 
@@ -99,9 +102,12 @@ class RecordFormViewModel(
      */
     private var opened: FormState? = savedState?.get<String>(OPENED_KEY)?.let(FormStateCodec::decode)
 
-    // a new form waits for its draft check (so a restored draft does not replace what was typed meanwhile) or, after
-    // process death, for what it opened with when that was not kept; "같은 커피 다시 기록" waits for the record it copies
-    private val _loaded = MutableStateFlow(args.entryId == null && args.againFrom == null && (drafts == null || (restored != null && opened != null)))
+    // a new form waits for its draft check (so a restored draft does not replace what was typed meanwhile) and its
+    // default recipe or, after process death, for what it opened with when that was not kept; "같은 커피 다시 기록" waits
+    // for the record it copies
+    private val _loaded = MutableStateFlow(
+        args.entryId == null && args.againFrom == null && ((restored != null && opened != null) || (drafts == null && defaultRecipe == null)),
+    )
     val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
 
     private val draftKey = RecordDrafts.keyFor(args)
@@ -116,6 +122,19 @@ class RecordFormViewModel(
     private val _folds = MutableStateFlow<Map<String, Boolean>>(emptyMap())
     /** Which parts of the form are folded, per kind of record ([FormFold]): read before the form shows. */
     val folds: StateFlow<Map<String, Boolean>> = _folds.asStateFlow()
+
+    /** Whether this form takes the default recipe when it opens (a new brew): the form then says so while it holds it. */
+    val takesDefaultRecipe: Boolean = DefaultRecipe.appliesTo(args)
+
+    /** The 기본 레시피's id ([DefaultRecipe.KEY]), for the ⭐ 내 레시피 cards; null when none is chosen. */
+    val defaultRecipeId: StateFlow<String?> = (defaultRecipe?.observeId() ?: flowOf(null))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Makes recipe [id] the default for the next new brews, or none with null; this form is left as it is. */
+    fun setDefaultRecipe(id: String?) {
+        val store = defaultRecipe ?: return
+        viewModelScope.launch { store.set(id) }
+    }
 
     /** Folds or unfolds [part] for records of the kind being written, for this and the next forms. */
     fun toggleFold(part: String) {
@@ -187,11 +206,14 @@ class RecordFormViewModel(
         val lastWater = brews.firstOrNull { it.waterType.isNotBlank() }?.waterType ?: ""
         // "같은 커피 다시 기록": the café record copied (a plain new café form when it is gone)
         val source = args.againFrom?.let { entries.getById(it) }
+        // 기본 레시피: a new brew starts with it (a deleted one is none)
+        val start = if (takesDefaultRecipe) defaultRecipe?.id()?.let { myRecipes.getById(it) } else null
         val withDefaults = { s: FormState ->
             when {
                 source != null -> FormMapper.again(source, s.createdAt, s.draftId)
                 s.mode == com.coffeejournal.ui.nav.FormMode.CAFE -> s
                 else -> s.copy(grind = s.grind.ifBlank { lastGrind }, waterType = s.waterType.ifBlank { lastWater })
+                    .let { brew -> start?.let { DefaultRecipe.startWith(brew, it) } ?: brew }
             }
         }
         if (restored != null) {
@@ -201,9 +223,9 @@ class RecordFormViewModel(
             return
         }
         _state.update(withDefaults)
-        val start = _state.value
-        val draft = takeDraft(start)
-        markOpened(start)
+        val opening = _state.value
+        val draft = takeDraft(opening)
+        markOpened(opening)
         draft?.let { _state.value = it }
         _loaded.value = true
     }
@@ -291,7 +313,12 @@ class RecordFormViewModel(
     fun applyChampion(c: Champions.Champion) = update { FormMapper.applyChampion(it, c) }
     fun applyCafeRecipe(r: CafeRecipes.Recipe) = update { FormMapper.applyCafeRecipe(it, r) }
     fun applyMyRecipe(r: MyRecipe) = update { FormMapper.applyMyRecipe(it, r) }
-    fun deleteMyRecipe(id: String) { viewModelScope.launch { myRecipes.delete(id) } }
+    fun deleteMyRecipe(id: String) {
+        viewModelScope.launch {
+            myRecipes.delete(id)
+            defaultRecipe?.clearIf(id)
+        }
+    }
 
     /** The brew timer's rows replace the step log (the timer asked before replacing a log of the user's own). */
     fun applyTimerSteps(steps: List<RecipeStep>) = update { it.copy(steps = steps.map(StepForm::from)) }

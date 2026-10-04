@@ -36,12 +36,15 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.coffeejournal.data.repo.CafePlaceRepository
 import com.coffeejournal.data.repo.EntryRepository
 import com.coffeejournal.data.repo.MiscRepository
+import com.coffeejournal.data.repo.MyRecipeRepository
 import com.coffeejournal.domain.model.Category
 import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.domain.model.GeoPoint
 import com.coffeejournal.domain.model.MiscItem
 import com.coffeejournal.domain.model.MiscType
+import com.coffeejournal.domain.model.MyRecipe
 import com.coffeejournal.domain.model.RecipeRef
+import com.coffeejournal.domain.model.RecipeStep
 import com.coffeejournal.domain.model.Scope
 import com.coffeejournal.domain.reference.CafeRecipes
 import com.coffeejournal.domain.rules.Dates
@@ -54,6 +57,7 @@ import com.coffeejournal.ui.ai.AiTexts
 import com.coffeejournal.ui.bean.b.WorldMapCanvas
 import com.coffeejournal.ui.bean.b.WorldMapGeometry
 import com.coffeejournal.ui.bean.b.WorldMapState
+import com.coffeejournal.ui.form.DefaultRecipeStore
 import com.coffeejournal.ui.form.FormFold
 import com.coffeejournal.ui.form.timer.BrewClock
 import com.coffeejournal.ui.form.timer.BrewTimerResult
@@ -129,7 +133,7 @@ class RouteScreenshotTest {
     @Test fun entryDetail_cupping() = show(Route.EntryDetail("e5"), "14-detail-cupping.png")
     @Test fun pantry() = show(Route.Pantry, "15-pantry.png")
     @Test fun pantryEditor() = show(Route.PantryEditor("p2"), "16-pantry-editor.png")
-    @Test fun myRecipes() = show(Route.MyRecipes, "17-my-recipes.png")
+    @Test fun myRecipes() = show(Route.MyRecipes(), "17-my-recipes.png")
     @Test fun backup() = show(Route.Backup, "18-backup.png")
     @Test fun miscForm() = show(Route.MiscForm(type = "dripper", itemId = "m1"), "19-misc-form.png")
     @Test fun bookForm() = show(Route.BookForm("b1"), "20-book-form.png")
@@ -584,6 +588,23 @@ class RouteScreenshotTest {
     @Test fun recordForm_cuppingFolded() = show(Route.RecordForm(mode = FormMode.CUPPING, entryId = "e5"), "96-form-cupping-folded.png") {
         click(FormFold.FOLD_ALL)
     }
+    // v1.6.0: 기본 레시피 — the new brew starts with it, and 내 레시피 and 설정 say which it is
+    private fun withDefaultRecipe() = runBlocking {
+        val now = Dates.nowMillis()
+        GlobalContext.get().get<MyRecipeRepository>().upsertAll(
+            listOf(
+                MyRecipe(
+                    id = "r1", name = "아침 3단", dose = "17", water = "272", temp = "93", dripper = "V60", filter = "하리오 01", grind = "코만단테 22클릭",
+                    steps = listOf(RecipeStep("0:00", "40", "30", "뜸"), RecipeStep("0:30", "110", "20", "2차"), RecipeStep("1:10", "122", "", "3차")), createdAt = now,
+                ),
+                MyRecipe(id = "r2", name = "간단 1:16", dose = "16", water = "256", temp = "91", dripper = "칼리타 웨이브", rating = 4, createdAt = now - 1),
+            ),
+        )
+        GlobalContext.get().get<DefaultRecipeStore>().set("r1")
+    }
+    @Test fun recordForm_defaultRecipe() { withDefaultRecipe(); show(Route.RecordForm(mode = FormMode.EXTRACT), "97-form-default-recipe.png") }
+    @Test fun myRecipes_default() { withDefaultRecipe(); show(Route.MyRecipes(newRecipe = false), "98-my-recipes-default.png") }
+    @Test fun newRecord_defaultRecipe() { withDefaultRecipe(); show(Route.NewRecord, "99-new-record-default-recipe.png") }
 
     private fun keyGuide(link: String, file: String) {
         compose.setContent {

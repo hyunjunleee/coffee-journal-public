@@ -29,13 +29,18 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.coffeejournal.data.repo.EntryRepository
+import com.coffeejournal.data.repo.MyRecipeRepository
 import com.coffeejournal.domain.model.CafePlace
 import com.coffeejournal.domain.model.Category
 import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.domain.model.MiscType
+import com.coffeejournal.domain.model.MyRecipe
 import com.coffeejournal.domain.reference.EquipmentTypes
 import com.coffeejournal.domain.rules.BeanNames
 import com.coffeejournal.domain.rules.Dates
+import com.coffeejournal.ui.form.DefaultRecipe
+import com.coffeejournal.ui.form.DefaultRecipeStore
+import com.coffeejournal.ui.form.DefaultRecipeTexts
 import com.coffeejournal.ui.nav.FormMode
 import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.theme.AppType
@@ -49,6 +54,7 @@ import com.coffeejournal.ui.theme.SectionLabel
 import com.coffeejournal.ui.theme.deriveOffMain
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -127,10 +133,14 @@ object NewRecordLogic {
     }
 }
 
-class NewRecordViewModel(entries: EntryRepository) : ViewModel() {
+class NewRecordViewModel(entries: EntryRepository, recipes: MyRecipeRepository, defaultRecipe: DefaultRecipeStore) : ViewModel() {
     /** Null until the records are read. */
     val recent: StateFlow<List<Entry>?> = entries.observeAll()
         .deriveOffMain { NewRecordLogic.recentCoffees(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** The 기본 레시피 a new brew starts with ([DefaultRecipe]), for 직접 내린 커피's line; null when none. */
+    val defaultRecipe: StateFlow<MyRecipe?> = combine(defaultRecipe.observeId(), recipes.observeAll()) { id, list -> DefaultRecipe.resolve(id, list) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 }
 
@@ -142,12 +152,15 @@ class NewRecordViewModel(entries: EntryRepository) : ViewModel() {
 fun NewRecordScreen(nav: NavHostController) {
     val vm = koinViewModel<NewRecordViewModel>()
     val recent by vm.recent.collectAsStateWithLifecycle()
+    val defaultRecipe by vm.defaultRecipe.collectAsStateWithLifecycle()
     val open = { route: Route -> nav.navigate(route) { popUpTo<Route.NewRecord> { inclusive = true } } }
     Column(Modifier.fillMaxSize().background(Ink.bg).statusBarsPadding()) {
         ScreenTitleBar(title = NewRecordTexts.TITLE, onBack = { nav.popBackStack() })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter).navigationBarsPadding()) {
             SectionLabel(NewRecordTexts.COFFEE)
-            ChoiceRow(NewRecordTexts.BREW, NewRecordTexts.BREW_HINT) { open(Route.RecordForm(mode = FormMode.EXTRACT)) }
+            ChoiceRow(NewRecordTexts.BREW, NewRecordTexts.BREW_HINT, note = defaultRecipe?.let { DefaultRecipeTexts.chooserHint(it.name) }) {
+                open(Route.RecordForm(mode = FormMode.EXTRACT))
+            }
             Hairline()
             ChoiceRow(NewRecordTexts.CAFE, NewRecordTexts.CAFE_HINT) { open(Route.RecordForm(mode = FormMode.CAFE)) }
             Hairline()
@@ -200,7 +213,7 @@ fun NewRecordScreen(nav: NavHostController) {
 
 /** One choice: its name, what it records, and an arrow; the whole row is the button. */
 @Composable
-private fun ChoiceRow(title: String, hint: String, onClick: () -> Unit) {
+private fun ChoiceRow(title: String, hint: String, note: String? = null, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().heightIn(min = MinTouchTarget).clickable(role = Role.Button, onClick = onClick).padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -208,6 +221,7 @@ private fun ChoiceRow(title: String, hint: String, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(title, style = AppType.cardTitle)
             Text(hint, style = AppType.small, modifier = Modifier.padding(top = 2.dp))
+            note?.let { Text("⭐ $it", style = AppType.small.copy(color = Ink.accent), modifier = Modifier.padding(top = 2.dp)) }
         }
         Text("→", style = AppType.body.copy(color = Ink.textMuted), modifier = Modifier.padding(start = 8.dp))
     }

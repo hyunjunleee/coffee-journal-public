@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
 
 sealed interface DetailEvent {
     data object Deleted : DetailEvent
-    data class RecipeSaved(val name: String) : DetailEvent
+    data class RecipeSaved(val name: String, val asDefault: Boolean = false) : DetailEvent
 }
 
 class EntryDetailViewModel(
@@ -34,6 +34,8 @@ class EntryDetailViewModel(
     private val beanMeta: BeanMetaRepository,
     private val myRecipes: MyRecipeRepository,
     private val photos: PhotoStore,
+    /** 기본 레시피 ([DefaultRecipe]): a recipe saved from here can become it. Null in plain unit tests. */
+    private val defaultRecipe: DefaultRecipeStore? = null,
 ) : ViewModel() {
     data class UiState(
         val loading: Boolean = true,
@@ -95,21 +97,24 @@ class EntryDetailViewModel(
         }
     }
 
-    /** Web saveAsMyRecipe: the record's brew parameters and steps become a reusable recipe. */
-    fun saveAsMyRecipe(name: String) {
+    /** Web saveAsMyRecipe: the record's brew parameters and steps become a reusable recipe, the default one with [asDefault]. */
+    fun saveAsMyRecipe(name: String, asDefault: Boolean = false) {
         val en = state.value.entry ?: return
         if (en.steps.isEmpty()) return
         val finalName = name.trim().ifBlank { EntryDisplay.defaultRecipeName(en) }
         viewModelScope.launch {
             val now = Dates.nowMillis()
+            val id = Ids.newId(now)
             myRecipes.upsert(
                 MyRecipe(
-                    id = Ids.newId(now), name = finalName, fromEntryId = en.id, beanName = en.name, rating = 0,
+                    id = id, name = finalName, fromEntryId = en.id, beanName = en.name, rating = 0,
                     dose = en.dose, water = en.water, temp = en.temp, dripper = en.dripper, filter = en.filter, grind = en.grind, time = en.time,
                     steps = en.steps, createdAt = now,
                 )
             )
-            _events.emit(DetailEvent.RecipeSaved(finalName))
+            val madeDefault = asDefault && defaultRecipe != null
+            if (madeDefault) defaultRecipe?.set(id)
+            _events.emit(DetailEvent.RecipeSaved(finalName, madeDefault))
         }
     }
 }

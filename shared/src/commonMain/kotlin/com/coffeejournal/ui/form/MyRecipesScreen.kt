@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -41,6 +42,7 @@ import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.GhostButton
 import com.coffeejournal.ui.theme.HairlineCard
+import com.coffeejournal.ui.theme.HintText
 import com.coffeejournal.ui.theme.Ink
 import com.coffeejournal.ui.theme.LeaveDialog
 import com.coffeejournal.ui.theme.PrimaryButton
@@ -50,15 +52,17 @@ import kotlinx.serialization.json.Json
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * Route.MyRecipes — saved recipes plus the "새 레시피 만들기" form (web 내 레시피 panel). The screen is opened from the
- * form's "+ 새 레시피 만들기" button, so the new-recipe form starts open with the name focused (web toggles it inline).
+ * Route.MyRecipes — saved recipes plus the "새 레시피 만들기" form (web 내 레시피 panel), and which one is the
+ * 기본 레시피 ([DefaultRecipe]). Opened from the form's "+ 새 레시피 만들기" button ([newRecipe]) the new-recipe form
+ * starts open with the name focused (web toggles it inline); from 설정's 기본 레시피 it starts closed.
  */
 @Composable
-fun MyRecipesScreen(nav: NavHostController) {
+fun MyRecipesScreen(nav: NavHostController, newRecipe: Boolean = true) {
     val vm = koinViewModel<MyRecipesViewModel>()
     val recipes by vm.recipes.collectAsStateWithLifecycle()
+    val defaultId by vm.defaultId.collectAsStateWithLifecycle()
     val equipment by vm.equipment.collectAsStateWithLifecycle()
-    var showForm by rememberSaveable { mutableStateOf(true) }
+    var showForm by rememberSaveable { mutableStateOf(newRecipe) }
     var pendingDelete by remember { mutableStateOf<MyRecipe?>(null) }
     // the new recipe's fields live here, so leaving the screen can ask about them and hiding the form keeps them
     var draft by rememberSaveable(stateSaver = DraftSaver) { mutableStateOf(MyRecipeDraft()) }
@@ -78,6 +82,7 @@ fun MyRecipesScreen(nav: NavHostController) {
                 else "직접 저장한 나만의 레시피예요. 레시피랑 다르게 부었는데 오히려 맛있었던 추출을 기록해두거나, 원두랑 상관없이 미리 레시피를 만들어뒀다가 나중에 적용해보세요.",
                 style = AppType.bodyMuted,
             )
+            if (recipes.isNotEmpty()) HintText(DefaultRecipeTexts.ABOUT_LIST)
             Spacer(Modifier.height(12.dp))
             GhostButton("+ 새 레시피 만들기", small = true, onClick = { showForm = !showForm })
             if (showForm) {
@@ -89,7 +94,8 @@ fun MyRecipesScreen(nav: NavHostController) {
             }
             Spacer(Modifier.height(16.dp))
             recipes.forEach { r ->
-                RecipeCard(r, onDelete = { pendingDelete = r })
+                val isDefault = r.id == defaultId
+                RecipeCard(r, isDefault, onToggleDefault = { vm.setDefault(if (isDefault) null else r.id) }, onDelete = { pendingDelete = r })
                 Spacer(Modifier.height(8.dp))
             }
             Spacer(Modifier.height(96.dp))
@@ -107,16 +113,19 @@ fun MyRecipesScreen(nav: NavHostController) {
 }
 
 @Composable
-private fun RecipeCard(r: MyRecipe, onDelete: () -> Unit) {
-    HairlineCard {
+private fun RecipeCard(r: MyRecipe, isDefault: Boolean, onToggleDefault: () -> Unit, onDelete: () -> Unit) {
+    HairlineCard(Modifier.testTag("recipe-card")) {
         Row(Modifier.fillMaxWidth()) {
             Text(r.name, style = AppType.cardTitle, modifier = Modifier.weight(1f))
-            if (r.rating > 0) Text("★".repeat(r.rating), style = AppType.monoSmall)
+            DefaultRecipe.badge(r, isDefault).takeIf { it.isNotEmpty() }?.let { Text(it, style = AppType.monoSmall) }
         }
-        Text("${r.dose.ifBlank { "?" }}g : ${r.water.ifBlank { "?" }}g · ${r.temp.ifBlank { "?" }}°C · ${r.dripper}", style = AppType.monoValue, modifier = Modifier.padding(top = 4.dp))
+        Text(DefaultRecipe.spec(r), style = AppType.monoValue, modifier = Modifier.padding(top = 4.dp))
         if (r.beanName.isNotBlank()) Text("원두: ${r.beanName}", style = AppType.bodyMuted, modifier = Modifier.padding(top = 4.dp))
         Text(if (r.steps.isEmpty()) "단계 없음" else "단계 ${r.steps.size}개", style = AppType.faint, modifier = Modifier.padding(top = 4.dp))
-        Row(Modifier.padding(top = 8.dp)) { GhostButton("삭제", small = true, danger = true, onClick = onDelete) }
+        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            GhostButton(if (isDefault) DefaultRecipeTexts.UNSET else DefaultRecipeTexts.SET, small = true, onClick = onToggleDefault)
+            GhostButton("삭제", small = true, danger = true, onClick = onDelete)
+        }
     }
 }
 

@@ -10,6 +10,7 @@ import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.Ids
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -31,16 +32,28 @@ data class MyRecipeDraft(
 /** Autocomplete sources of the new-recipe form (web dripper-datalist / filter-datalist). */
 data class RecipeEquipment(val drippers: List<String> = emptyList(), val filters: List<String> = emptyList())
 
-class MyRecipesViewModel(private val repo: MyRecipeRepository, misc: MiscRepository) : ViewModel() {
-    val recipes: StateFlow<List<MyRecipe>> = repo.observeAll()
-        .map { list -> list.sortedByDescending { it.createdAt } }
+class MyRecipesViewModel(private val repo: MyRecipeRepository, misc: MiscRepository, private val defaultRecipe: DefaultRecipeStore) : ViewModel() {
+    /** The 기본 레시피's id ([DefaultRecipe]); null when none is chosen. */
+    val defaultId: StateFlow<String?> = defaultRecipe.observeId()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** The default first, then the newest first. */
+    val recipes: StateFlow<List<MyRecipe>> = combine(repo.observeAll(), defaultRecipe.observeId()) { list, id -> DefaultRecipe.ordered(list, id) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val equipment: StateFlow<RecipeEquipment> = misc.observeAll()
         .map { items -> RecipeEquipment(ownedFirstNames(items, MiscType.DRIPPER), ownedFirstNames(items, MiscType.FILTER)) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RecipeEquipment())
 
-    fun delete(id: String) { viewModelScope.launch { repo.delete(id) } }
+    fun delete(id: String) {
+        viewModelScope.launch {
+            repo.delete(id)
+            defaultRecipe.clearIf(id)
+        }
+    }
+
+    /** Makes recipe [id] the default for new brews, or none with null. */
+    fun setDefault(id: String?) { viewModelScope.launch { defaultRecipe.set(id) } }
 
     /** Returns false when the name is missing (the only required field). */
     fun create(draft: MyRecipeDraft): Boolean {

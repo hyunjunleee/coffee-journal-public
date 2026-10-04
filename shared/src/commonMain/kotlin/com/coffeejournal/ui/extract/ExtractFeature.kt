@@ -22,7 +22,7 @@ object ExtractFeature : Feature {
         viewModel { (itemId: String) -> PantryEditorViewModel(itemId.ifBlank { null }, get(), get()) }
         viewModel { (beanKey: String) -> BrewCompareViewModel(beanKey, get(), get()) }
         viewModel { StatsViewModel(get(), get()) }
-        viewModel { NewRecordViewModel(get()) }
+        viewModel { NewRecordViewModel(get(), get(), get()) }
     }
 
     override fun NavGraphBuilder.routes(nav: NavHostController) {
