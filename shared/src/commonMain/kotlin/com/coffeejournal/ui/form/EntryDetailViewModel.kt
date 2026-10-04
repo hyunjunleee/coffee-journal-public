@@ -20,12 +20,13 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 sealed interface DetailEvent {
     data object Deleted : DetailEvent
-    data class RecipeSaved(val name: String) : DetailEvent
+    data class RecipeSaved(val name: String, val asDefault: Boolean = false) : DetailEvent
 }
 
 class EntryDetailViewModel(
@@ -34,6 +35,8 @@ class EntryDetailViewModel(
     private val beanMeta: BeanMetaRepository,
     private val myRecipes: MyRecipeRepository,
     private val photos: PhotoStore,
+    /** 기본 레시피 ([DefaultRecipe]): a recipe saved from here can become it. Null in plain unit tests. */
+    private val defaultRecipe: DefaultRecipeStore? = null,
 ) : ViewModel() {
     data class UiState(
         val loading: Boolean = true,
@@ -46,6 +49,11 @@ class EntryDetailViewModel(
     )
 
     @Volatile private var deleting = false
+
+    /** The 기본 레시피's name, for the save-as-recipe switch's hint (what turning it on replaces); null when none. */
+    val defaultRecipeName: StateFlow<String?> = (defaultRecipe?.observeId() ?: flowOf(null))
+        .combine(myRecipes.observeAll()) { id, list -> DefaultRecipe.resolve(id, list)?.name }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     // the sibling scan normalises every record's name, so it runs off the main thread (gap #10)
     val state: StateFlow<UiState> = combine(entries.observeAll(), beanMeta.observeBest()) { all, best -> all to best }.deriveOffMain { (all, best) ->
@@ -95,21 +103,24 @@ class EntryDetailViewModel(
         }
     }
 
-    /** Web saveAsMyRecipe: the record's brew parameters and steps become a reusable recipe. */
-    fun saveAsMyRecipe(name: String) {
+    /** Web saveAsMyRecipe: the record's brew parameters and steps become a reusable recipe, the default one with [asDefault]. */
+    fun saveAsMyRecipe(name: String, asDefault: Boolean = false) {
         val en = state.value.entry ?: return
         if (en.steps.isEmpty()) return
         val finalName = name.trim().ifBlank { EntryDisplay.defaultRecipeName(en) }
         viewModelScope.launch {
             val now = Dates.nowMillis()
+            val id = Ids.newId(now)
             myRecipes.upsert(
                 MyRecipe(
-                    id = Ids.newId(now), name = finalName, fromEntryId = en.id, beanName = en.name, rating = 0,
+                    id = id, name = finalName, fromEntryId = en.id, beanName = en.name, rating = 0,
                     dose = en.dose, water = en.water, temp = en.temp, dripper = en.dripper, filter = en.filter, grind = en.grind, time = en.time,
                     steps = en.steps, createdAt = now,
                 )
             )
-            _events.emit(DetailEvent.RecipeSaved(finalName))
+            val madeDefault = asDefault && defaultRecipe != null
+            if (madeDefault) defaultRecipe?.set(id)
+            _events.emit(DetailEvent.RecipeSaved(finalName, madeDefault))
         }
     }
 }

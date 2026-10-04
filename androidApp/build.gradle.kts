@@ -28,7 +28,7 @@ android {
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = commitEpochSeconds?.let { ((it - 1_767_225_600L) / 60L).toInt().coerceAtLeast(2) } ?: 1
-        versionName = "1.5.0 ($commitShortSha)"
+        versionName = "1.6.0 ($commitShortSha)"
         // Phones and tablets only: the x86 / x86_64 builds of the native libraries (MapLibre, SQLite) serve emulators
         // and a few Chromebooks, and would add about 10 MB to the one sideloaded APK.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }

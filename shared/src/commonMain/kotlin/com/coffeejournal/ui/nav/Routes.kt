@@ -31,7 +31,8 @@ sealed interface Route {
     @Serializable data class MiscForm(val type: String, val itemId: String? = null) : Route
     /** scope: a new roastery's 국내/해외 (the map tab it was added from); null keeps the form's default. */
     @Serializable data class FlatItemForm(val type: String, val itemId: String? = null, val scope: String? = null) : Route
-    @Serializable data object MyRecipes : Route
+    /** 내 레시피; [newRecipe]: the "새 레시피 만들기" form starts open (from a record form's ⭐ 내 레시피), not from 설정. */
+    @Serializable data class MyRecipes(val newRecipe: Boolean = true) : Route
     @Serializable data object Backup : Route
     @Serializable data class CountryDetail(val en: String) : Route
     @Serializable data class NoteDetail(val kind: String, val noteKey: String) : Route

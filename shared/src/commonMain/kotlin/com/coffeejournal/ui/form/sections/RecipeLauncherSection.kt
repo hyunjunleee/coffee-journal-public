@@ -12,16 +12,20 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.model.MyRecipe
 import com.coffeejournal.domain.reference.CafeRecipes
 import com.coffeejournal.domain.reference.Champions
 import com.coffeejournal.domain.rules.Prices
+import com.coffeejournal.ui.form.DefaultRecipe
+import com.coffeejournal.ui.form.DefaultRecipeTexts
 import com.coffeejournal.ui.form.LauncherCard
 import com.coffeejournal.ui.form.RecipeLauncher
 import com.coffeejournal.ui.theme.AppType
@@ -41,9 +45,16 @@ internal fun RecipeLauncherSection(
     onMine: (MyRecipe) -> Unit,
     onDeleteMine: (String) -> Unit,
     onOpenMyRecipes: () -> Unit,
+    /** The 기본 레시피's id: its card says so (the list keeps its order). */
+    defaultRecipeId: String? = null,
+    /** Makes a recipe the default (null: none). */
+    onSetDefault: (String?) -> Unit = {},
+    /** "기본 레시피로 채웠어요" while the form holds the default recipe it opened with; null otherwise. */
+    startedWith: String? = null,
 ) {
     Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
         Text("레시피로 시작", style = AppType.sectionLabel)
+        startedWith?.let { Text(it, style = AppType.small, modifier = Modifier.testTag("default-recipe-line").padding(top = 6.dp)) }
         Spacer(Modifier.height(8.dp))
         // wraps instead of scrolling, so all three stay in sight on a narrow screen or with a large font
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -55,7 +66,7 @@ internal fun RecipeLauncherSection(
         when (open) {
             RecipeLauncher.CHAMPIONS -> ChampionsPanel(onChampion)
             RecipeLauncher.CAFE -> CafePanel(onCafe)
-            RecipeLauncher.MINE -> MyRecipesPanel(myRecipes, onMine, onDeleteMine, onOpenMyRecipes)
+            RecipeLauncher.MINE -> MyRecipesPanel(myRecipes, defaultRecipeId, onMine, onDeleteMine, onSetDefault, onOpenMyRecipes)
             null -> {}
         }
     }
@@ -96,7 +107,14 @@ private fun CafePanel(onApply: (CafeRecipes.Recipe) -> Unit) {
 }
 
 @Composable
-private fun MyRecipesPanel(recipes: List<MyRecipe>, onApply: (MyRecipe) -> Unit, onDelete: (String) -> Unit, onOpenMyRecipes: () -> Unit) {
+private fun MyRecipesPanel(
+    recipes: List<MyRecipe>,
+    defaultId: String?,
+    onApply: (MyRecipe) -> Unit,
+    onDelete: (String) -> Unit,
+    onSetDefault: (String?) -> Unit,
+    onOpenMyRecipes: () -> Unit,
+) {
     var pendingDelete by remember { mutableStateOf<MyRecipe?>(null) }
     if (recipes.isEmpty()) {
         Intro("아직 저장된 내 레시피가 없어요. 기록을 펼쳤을 때 \"⭐ 내 레시피로 저장\"을 누르거나, 아래에서 원두랑 상관없이 새로 만들어보세요.")
@@ -105,12 +123,18 @@ private fun MyRecipesPanel(recipes: List<MyRecipe>, onApply: (MyRecipe) -> Unit,
     }
     GhostButton("+ 새 레시피 만들기", small = true, onClick = onOpenMyRecipes, modifier = Modifier.padding(bottom = 12.dp))
     recipes.forEach { r ->
-        LauncherCard(
-            title = r.name, right = if (r.rating > 0) "★".repeat(r.rating) else "",
-            spec = "${r.dose.ifBlank { "?" }}g : ${r.water.ifBlank { "?" }}g · ${r.temp.ifBlank { "?" }}°C · ${r.dripper}",
-            desc = r.beanName.takeIf { it.isNotBlank() }?.let { "원두: $it" }, applyLabel = "이 레시피 적용 →",
-            onApply = { onApply(r) }, onDelete = { pendingDelete = r },
-        )
+        key(r.id) {
+            val isDefault = r.id == defaultId
+            LauncherCard(
+                title = r.name, right = DefaultRecipe.badge(r, isDefault),
+                spec = DefaultRecipe.spec(r),
+                desc = r.beanName.takeIf { it.isNotBlank() }?.let { "원두: $it" }, applyLabel = "이 레시피 적용 →",
+                onApply = { onApply(r) }, onDelete = { pendingDelete = r }, highlight = isDefault,
+                extraLabel = if (isDefault) DefaultRecipeTexts.UNSET else DefaultRecipeTexts.SET,
+                extraDescription = DefaultRecipeTexts.toggleLabel(r.name, isDefault),
+                onExtra = { onSetDefault(if (isDefault) null else r.id) },
+            )
+        }
     }
     pendingDelete?.let { r ->
         AlertDialog(

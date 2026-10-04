@@ -16,7 +16,7 @@ packages:
 settings:
   base:
     # CI passes the Android app's version name and code (androidApp/build.gradle.kts) so both builds carry the same
-    MARKETING_VERSION: "1.5.0"
+    MARKETING_VERSION: "1.6.0"
     CURRENT_PROJECT_VERSION: "1"
 targets:
   CoffeeJournal:

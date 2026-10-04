@@ -434,14 +434,14 @@ class DraftFlowTest : FlowTestBase() {
     @Test
     fun myRecipes_leavingAndCancellingTheNewRecipeAsk() {
         startNav(Route.Misc)
-        go(Route.MyRecipes)
+        go(Route.MyRecipes())
         waitForText("내 레시피")
         // untouched: back leaves at once
         back()
         waitGone(hasText("내 레시피"))
         assertFalse(has(isDialog()))
 
-        go(Route.MyRecipes)
+        go(Route.MyRecipes())
         typeInto("예: 밝은 산미용 3단 푸어", "아침 레시피")
         back()
         waitFor(leaveDialog(LeaveTexts.DISCARD_TITLE))

@@ -20,6 +20,8 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import com.coffeejournal.ui.ai.AiSettingsSection
 import com.coffeejournal.ui.ai.AiTexts
+import com.coffeejournal.ui.form.DefaultRecipeSettingsSection
+import com.coffeejournal.ui.form.DefaultRecipeTexts
 import com.coffeejournal.ui.form.TextLink
 import com.coffeejournal.ui.map.search.PlaceSearchSettingsSection
 import com.coffeejournal.ui.map.search.PlaceSearchTexts
@@ -103,6 +105,9 @@ fun SettingsScreen(nav: NavHostController) {
             Choice("글자 크기", TextSize.entries, display.textSize, { it.label }, SettingsTexts.SIZE_HINT) { s -> vm.update { it.copy(textSize = s) } }
             Choice("화면 전환", Motion.entries, display.motion, { it.label }, SettingsTexts.MOTION_HINT) { m -> vm.update { it.copy(motion = m) } }
             Preview()
+
+            SectionLabel(DefaultRecipeTexts.SECTION)
+            DefaultRecipeSettingsSection(nav)
 
             SectionLabel("알림")
             ReminderSettingsSection()

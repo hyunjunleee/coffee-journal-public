@@ -30,6 +30,7 @@ import androidx.navigation.NavHostController
 import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.ui.map.CafePlaceRow
 import com.coffeejournal.ui.nav.Route
+import com.coffeejournal.ui.notify.SettingSwitch
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.EmptyNote
@@ -55,7 +56,7 @@ fun EntryDetailScreen(nav: NavHostController, entryId: String) {
         vm.events.collect { ev ->
             when (ev) {
                 DetailEvent.Deleted -> nav.popBackStack()
-                is DetailEvent.RecipeSaved -> flash = EntryDisplay.recipeSavedText(ev.name)
+                is DetailEvent.RecipeSaved -> flash = if (ev.asDefault) DefaultRecipeTexts.savedAsDefault(ev.name) else EntryDisplay.recipeSavedText(ev.name)
             }
         }
     }
@@ -98,10 +99,12 @@ fun EntryDetailScreen(nav: NavHostController, entryId: String) {
         )
     }
     if (recipeDialog) ui.entry?.let { en ->
+        val currentDefault by vm.defaultRecipeName.collectAsStateWithLifecycle()
         RecipeNameDialog(
             defaultName = EntryDisplay.defaultRecipeName(en),
+            currentDefault = currentDefault,
             onDismiss = { recipeDialog = false },
-            onConfirm = { name -> recipeDialog = false; vm.saveAsMyRecipe(name) },
+            onConfirm = { name, asDefault -> recipeDialog = false; vm.saveAsMyRecipe(name, asDefault) },
         )
     }
 }
@@ -129,19 +132,22 @@ private fun DetailActions(
 
 /** Web window.prompt for the recipe name. */
 @Composable
-private fun RecipeNameDialog(defaultName: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+private fun RecipeNameDialog(defaultName: String, currentDefault: String?, onDismiss: () -> Unit, onConfirm: (String, Boolean) -> Unit) {
     var name by remember { mutableStateOf(defaultName) }
+    var asDefault by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss, shape = RectangleShape, containerColor = Ink.bg,
         title = { Text("내 레시피로 저장", style = AppType.title) },
         text = {
-            Column {
+            // scrolls, so the switch stays reachable at a large font size with the keyboard up
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text("이 레시피 이름을 정해주세요 (나중에 알아보기 쉽게):", style = AppType.small)
                 Spacer(Modifier.height(8.dp))
                 FormTextField(value = name, onValueChange = { name = it }, placeholder = defaultName)
+                SettingSwitch(DefaultRecipeTexts.SAVE_AS_DEFAULT, DefaultRecipeTexts.saveAsDefaultHint(currentDefault), asDefault, { asDefault = it }, Modifier.padding(top = 4.dp))
             }
         },
-        confirmButton = { PrimaryButton("저장", small = true, onClick = { onConfirm(name) }) },
+        confirmButton = { PrimaryButton("저장", small = true, onClick = { onConfirm(name, asDefault) }) },
         dismissButton = { GhostButton("취소", small = true, onClick = onDismiss) },
     )
 }
