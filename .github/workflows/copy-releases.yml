@@ -13,13 +13,14 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       SRC: hyunjunleee/coffee-journal
+      ONLY: v1.6.0
     steps:
       - name: Copy every release, oldest first (v1.6.0 ends up Latest)
         run: |
           set -euo pipefail
           gh api "repos/$SRC/releases?per_page=100" > releases.json
           echo "source releases: $(jq length releases.json)"
-          jq -c 'sort_by(.created_at)[]' releases.json | while read -r rel; do
+          jq -c --arg only "${ONLY:-}" 'sort_by(.created_at)[] | select($only == "" or ([.tag_name] | inside($only | split(","))))' releases.json | while read -r rel; do
             tag=$(jq -r .tag_name <<<"$rel")
             name=$(jq -r .name <<<"$rel")
             jq -r '.body // ""' <<<"$rel" > notes.md
@@ -43,7 +44,7 @@ jobs:
       - name: Compare with the source
         run: |
           set -euo pipefail
-          for tag in $(jq -r '.[].tag_name' releases.json); do
+          for tag in $(jq -r --arg only "${ONLY:-}" '.[].tag_name | select($only == "" or ([.] | inside($only | split(","))))' releases.json); do
             a=$(gh api "repos/$SRC/releases/tags/$tag" --jq '[.assets[] | "\(.name) \(.size)"] | sort | join(",")')
             b=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq '[.assets[] | "\(.name) \(.size)"] | sort | join(",")')
             [ "$a" = "$b" ] && echo "OK $tag" || { echo "::error::$tag differs"; exit 1; }
