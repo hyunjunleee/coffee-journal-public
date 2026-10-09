@@ -29,7 +29,7 @@ internal object OsmPhoton {
     private const val NEAR_DEG = 0.25
 
     /** Names the app on each request, as public OpenStreetMap services ask. */
-    val HEADERS = mapOf("User-Agent" to "CoffeeJournal (+https://github.com/hyunjunleee/coffee-journal)")
+    val HEADERS = mapOf("User-Agent" to "CoffeeJournal (+https://github.com/hyunjunleee/coffee-journal-public)")
 
     /**
      * [query] kept to Korea when [domestic] (to the box around [near] when given), anywhere else otherwise (the results

@@ -4,7 +4,7 @@
 
 ## 설치
 
-앱스토어·플레이스토어에는 없습니다. 최신 파일은 항상 [릴리스 페이지의 Latest](https://github.com/hyunjunleee/coffee-journal/releases/latest)에 있습니다(저장소가 공개라 로그인 없이 받을 수 있습니다).
+앱스토어·플레이스토어에는 없습니다. 최신 파일은 항상 [릴리스 페이지의 Latest](https://github.com/hyunjunleee/coffee-journal-public/releases/latest)에 있습니다(저장소가 공개라 로그인 없이 받을 수 있습니다).
 
 | 파일 | 대상 |
 |---|---|
@@ -14,7 +14,7 @@
 빌드 번호는 커밋 시각(2026-01-01부터의 분)이라 클수록 최신입니다. 버전별 릴리스(v1.1.0 … v1.4.2, v1.5.0, v1.6.0 …)는 지우지 않고 남겨 두므로 이전 버전도 받을 수 있습니다. 푸시마다 만들어지는 개발 빌드는 **APK builds**·**iOS builds** 릴리스에 모입니다.
 
 ### 안드로이드
-1. 휴대폰 브라우저로 [Latest 릴리스](https://github.com/hyunjunleee/coffee-journal/releases/latest)를 열고 Assets의 `.apk`를 받습니다.
+1. 휴대폰 브라우저로 [Latest 릴리스](https://github.com/hyunjunleee/coffee-journal-public/releases/latest)를 열고 Assets의 `.apk`를 받습니다.
 2. 받은 파일을 엽니다. "알 수 없는 앱 설치" 허용을 물으면 그 앱(Chrome, 내 파일 등)에 **이 출처 허용**을 켜고 돌아와 **설치**를 누릅니다.
 3. Play 프로텍트가 "알 수 없는 개발자"라고 경고하면 **세부정보 › 무시하고 설치**를 누릅니다(플레이스토어를 거치지 않은 앱이라 나오는 경고입니다).
 
@@ -44,7 +44,7 @@
 
 Coffee Journal 설치:
 
-8. 아이폰 Safari로 [Latest 릴리스](https://github.com/hyunjunleee/coffee-journal/releases/latest)를 열고 `…-unsigned.ipa`를 받습니다(파일 앱의 "다운로드"에 저장됩니다).
+8. 아이폰 Safari로 [Latest 릴리스](https://github.com/hyunjunleee/coffee-journal-public/releases/latest)를 열고 `…-unsigned.ipa`를 받습니다(파일 앱의 "다운로드"에 저장됩니다).
 9. LocalDevVPN이 연결된 상태로 SideStore › **My Apps** › 왼쪽 위 **+**를 누르고 받은 `.ipa`를 고릅니다. 끝나면 홈 화면에 Coffee Journal이 생깁니다.
 10. 앱을 엽니다. 알림을 켤 때, 봉투 사진을 찍거나 고를 때, "현재 위치"를 누를 때 각각 권한을 한 번 묻습니다.
 
