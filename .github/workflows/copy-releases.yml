@@ -1,5 +1,4 @@
-# One-off: copies the tags and releases (with their files) of hyunjunleee/coffee-journal into this repository.
-# Tags created with the workflow token start no other workflow, so no old version is rebuilt.
+# One-off: makes the copied release notes byte-identical to hyunjunleee/coffee-journal's.
 name: Copy releases
 on:
   push:
@@ -7,46 +6,23 @@ on:
 permissions:
   contents: write
 jobs:
-  copy:
+  notes:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}
       SRC: hyunjunleee/coffee-journal
-      ONLY: ""
     steps:
-      - name: Copy every release, oldest first (v1.6.0 ends up Latest)
+      - name: Release notes exactly as the source
         run: |
           set -euo pipefail
           gh api "repos/$SRC/releases?per_page=100" > releases.json
-          echo "source releases: $(jq length releases.json)"
-          jq -c --arg only "${ONLY:-}" 'sort_by(.created_at)[] | select($only == "" or ([.tag_name] | inside($only | split(","))))' releases.json | while read -r rel; do
+          jq -c '.[]' releases.json | while read -r rel; do
             tag=$(jq -r .tag_name <<<"$rel")
-            name=$(jq -r .name <<<"$rel")
-            jq -r '.body // ""' <<<"$rel" > notes.md
-            sha=$(gh api "repos/$SRC/commits/$tag" --jq .sha)
-            latest=false; [ "$tag" = "v1.6.0" ] && latest=true
-            pre=$(jq -r .prerelease <<<"$rel")
-            if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-              echo "$tag already here"
-            else
-              args=(--repo "$GITHUB_REPOSITORY" --target "$sha" --title "$name" --notes-file notes.md --latest="$latest")
-              [ "$pre" = "true" ] && args+=(--prerelease)
-              gh release create "$tag" "${args[@]}"
-            fi
-            rm -rf "a/$tag"; mkdir -p "a/$tag"
-            gh release download "$tag" --repo "$SRC" --dir "a/$tag"
-            n=$(ls "a/$tag" | wc -l)
-            [ "$n" -gt 0 ] && gh release upload "$tag" a/"$tag"/* --repo "$GITHUB_REPOSITORY" --clobber
-            echo "$tag @ ${sha:0:7}: $n files"
-            rm -rf "a/$tag"
-          done
-      - name: Compare with the source
-        run: |
-          set -euo pipefail
-          for tag in $(jq -r --arg only "${ONLY:-}" '.[].tag_name | select($only == "" or ([.] | inside($only | split(","))))' releases.json); do
-            a=$(gh api "repos/$SRC/releases/tags/$tag" --jq '[.assets[] | "\(.name) \(.size)"] | sort | join(",")')
-            b=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq '[.assets[] | "\(.name) \(.size)"] | sort | join(",")')
-            [ "$a" = "$b" ] && echo "OK $tag" || { echo "::error::$tag differs"; exit 1; }
+            jq -j '.body // ""' <<<"$rel" > notes.md
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file notes.md > /dev/null
+            a=$(jq -r '.body // ""' <<<"$rel" | sha1sum)
+            b=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq '.body // ""' | sha1sum)
+            [ "$a" = "$b" ] && echo "notes OK $tag" || { echo "::error::notes differ for $tag"; exit 1; }
           done
           gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '"Latest: " + .tag_name'
