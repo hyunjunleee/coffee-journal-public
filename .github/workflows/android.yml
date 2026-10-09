@@ -15,11 +15,11 @@ on:
   push:
     branches: [main, 'claude/**']
     tags: ['v*']
-    # design docs, the text corpus (data/, tools/corpus/), the AI evaluation tool (ai-eval.yml) and the iOS host app (ios.yml) do not change the Android app; the
+    # design docs, the AI evaluation tool (ai-eval.yml) and the iOS host app (ios.yml) do not change the Android app; the
     # evaluation's prompt files (*.txt) do, since the app's prompts must equal them (AiPlatformTest)
-    paths-ignore: ['docs/**', 'data/**', 'tools/corpus/**', 'tools/ai-eval/*.py', 'tools/ai-eval/*.md', 'tools/ai-eval/*.json', '.github/workflows/ai-eval.yml', 'iosApp/**', '.github/workflows/ios.yml']
+    paths-ignore: ['docs/**', 'tools/ai-eval/*.py', 'tools/ai-eval/*.md', 'tools/ai-eval/*.json', '.github/workflows/ai-eval.yml', 'iosApp/**', '.github/workflows/ios.yml']
   pull_request:
-    paths-ignore: ['docs/**', 'data/**', 'tools/corpus/**', 'tools/ai-eval/*.py', 'tools/ai-eval/*.md', 'tools/ai-eval/*.json', '.github/workflows/ai-eval.yml', 'iosApp/**', '.github/workflows/ios.yml']
+    paths-ignore: ['docs/**', 'tools/ai-eval/*.py', 'tools/ai-eval/*.md', 'tools/ai-eval/*.json', '.github/workflows/ai-eval.yml', 'iosApp/**', '.github/workflows/ios.yml']
   workflow_dispatch:
     inputs:
       dependency_verification:
