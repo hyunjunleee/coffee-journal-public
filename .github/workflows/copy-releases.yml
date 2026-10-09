@@ -13,7 +13,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       SRC: hyunjunleee/coffee-journal
-      ONLY: v1.5.0
+      ONLY: ""
     steps:
       - name: Copy every release, oldest first (v1.6.0 ends up Latest)
         run: |
